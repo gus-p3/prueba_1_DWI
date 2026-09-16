@@ -39,3 +39,7 @@ bin/
 ### Mac OS / Windows ###
 .DS_Store
 Thumbs.db
+
+### Carpetas locales del proyecto ###
+docs/
+prueba_antes_de_los/
