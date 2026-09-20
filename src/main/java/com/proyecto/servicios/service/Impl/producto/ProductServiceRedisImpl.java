@@ -56,7 +56,8 @@ public class ProductServiceRedisImpl implements ProductoServiceRedis {
             Object cached = redisTemplate.opsForValue().get(REDIS_CATALOGO_KEY);
             if (cached != null) {
                 log.info("Productos recuperados desde cache Redis.");
-                return objectMapper.convertValue(cached, new TypeReference<List<ProductoResponse>>() {});
+                List<ProductoResponse> enCache = objectMapper.convertValue(cached, new TypeReference<List<ProductoResponse>>() {});
+                return productoMapper.filtrarYOrdenarPorTipoFront(enCache);
             }
         } catch (Exception ex) {
             log.warn("No fue posible consultar Redis: {}", ex.getMessage());
@@ -65,7 +66,8 @@ public class ProductServiceRedisImpl implements ProductoServiceRedis {
         List<Producto> enPostgres = productoRepository.findAll();
         if (enPostgres != null && !enPostgres.isEmpty()) {
             log.info("Productos recuperados desde base de datos ({} registros).", enPostgres.size());
-            return productoMapper.toResponseList(enPostgres);
+            List<ProductoResponse> responses = productoMapper.toResponseList(enPostgres);
+            return productoMapper.filtrarYOrdenarPorTipoFront(responses);
         }
 
         log.info("No se encontraron productos en cache ni en base de datos. Consultando API...");
@@ -75,7 +77,8 @@ public class ProductServiceRedisImpl implements ProductoServiceRedis {
     private List<ProductoResponse> consumirApiYGuardar(boolean cron) {
         String xmlResponse = consultarApiGestoPagoXml();
         List<GestoPagoProductXmlResponse.ProductoXmlItem> items = transformProduct.transformProductXML(xmlResponse);
-        List<ProductoResponse> productos = productoMapper.filtrarYOrdenarPorTipoFront(items);
+        List<ProductoResponse> itemJSON = transformProduct.transformProductJSON(items);
+        List<ProductoResponse> productos = productoMapper.filtrarYOrdenarPorTipoFront(itemJSON);
 
         if (cron) {
             try {

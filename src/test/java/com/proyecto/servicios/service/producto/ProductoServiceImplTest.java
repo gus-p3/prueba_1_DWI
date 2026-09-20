@@ -7,6 +7,7 @@ import com.proyecto.servicios.mapper.producto.ProductoMapper;
 import com.proyecto.servicios.model.gestopago.producto.ProductoPatchRequest;
 import com.proyecto.servicios.model.gestopago.producto.ProductoRequest;
 import com.proyecto.servicios.model.gestopago.producto.ProductoResponse;
+import com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse;
 import com.proyecto.servicios.repositorys.gestopago.GestoPagoTokenRepository;
 import com.proyecto.servicios.repositorys.gestopago.producto.ProductoRepository;
 import com.proyecto.servicios.service.Impl.producto.ProductoServiceImpl;
@@ -41,6 +42,9 @@ class ProductoServiceImplTest {
 
     @Mock
     private GestoPagoTokenRepository tokenRepository;
+
+    @Mock
+    private TransformProduct transformProduct;
 
     @InjectMocks
     private ProductoServiceImpl productoService;
@@ -87,6 +91,11 @@ class ProductoServiceImplTest {
                 .thenReturn(Optional.of(mockToken));
         when(gestoPagoProductClient.getProductListXml("Bearer mock_bearer_token_xyz"))
                 .thenReturn(SAMPLE_XML);
+        GestoPagoProductXmlResponse.ProductoXmlItem item = new GestoPagoProductXmlResponse.ProductoXmlItem();
+        when(transformProduct.transformProductXML(SAMPLE_XML))
+                .thenReturn(List.of(item));
+        when(transformProduct.transformProductEntities(anyList()))
+                .thenReturn(List.of(mockProducto));
         when(productoRepository.saveAll(anyList()))
                 .thenReturn(List.of(mockProducto));
 
@@ -212,6 +221,11 @@ class ProductoServiceImplTest {
                 .thenReturn(Optional.of(mockToken));
         when(gestoPagoProductClient.getProductListXml("Bearer mock_bearer_token_xyz"))
                 .thenReturn(SAMPLE_XML);
+        GestoPagoProductXmlResponse.ProductoXmlItem item = new GestoPagoProductXmlResponse.ProductoXmlItem();
+        when(transformProduct.transformProductXML(SAMPLE_XML))
+                .thenReturn(List.of(item));
+        when(transformProduct.transformProductJSON(anyList()))
+                .thenReturn(List.of(mockProductoResponse));
 
         List<ProductoResponse> resultado = productoService.obtenerProductosXML();
 
@@ -227,6 +241,8 @@ class ProductoServiceImplTest {
                 .thenReturn(Optional.of(mockToken));
         when(gestoPagoProductClient.getProductListXml("Bearer mock_bearer_token_xyz"))
                 .thenReturn("");
+        when(transformProduct.transformProductXML(""))
+                .thenThrow(new RuntimeException("La respuesta XML recibida de GestoPago es nula o vacía."));
 
         RuntimeException exception = assertThrows(RuntimeException.class,
                 () -> productoService.obtenerProductosXML());

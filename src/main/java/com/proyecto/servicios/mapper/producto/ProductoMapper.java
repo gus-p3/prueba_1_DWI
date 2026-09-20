@@ -43,20 +43,20 @@ public interface ProductoMapper {
 
     List<Producto> xmlItemsToEntityList(List<com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse.ProductoXmlItem> xmlItems);
 
-    default List<ProductoResponse> filtrarYOrdenarPorTipoFront(List<com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse.ProductoXmlItem> xmlItems) {
-        if (xmlItems == null || xmlItems.isEmpty()) {
+    default List<ProductoResponse> filtrarYOrdenarPorTipoFront(List<ProductoResponse> jsonItems) {
+        if (jsonItems == null || jsonItems.isEmpty()) {
             return java.util.Collections.emptyList();
         }
-
-        List<ProductoResponse> responses = xmlItemsToResponseList(xmlItems);
         java.util.concurrent.atomic.AtomicInteger index = new java.util.concurrent.atomic.AtomicInteger(1);
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
 
-        return responses.stream()
+        return jsonItems.stream()
                 .filter(p -> p.getTipoFront() != null && p.getTipoFront() > 0)
                 .sorted(Comparator.comparing(ProductoResponse::getTipoFront, Comparator.nullsLast(Comparator.naturalOrder())))
                 .peek(p -> {
-                    p.setId(index.getAndIncrement());
+                    if (p.getId() == null) {
+                        p.setId(index.getAndIncrement());
+                    }
                     if (p.getCreatedAt() == null) {
                         p.setCreatedAt(now);
                     }
