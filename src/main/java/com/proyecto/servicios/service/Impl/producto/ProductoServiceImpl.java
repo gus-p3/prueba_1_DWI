@@ -11,16 +11,13 @@ import com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse;
 import com.proyecto.servicios.repositorys.gestopago.GestoPagoTokenRepository;
 import com.proyecto.servicios.repositorys.gestopago.producto.ProductoRepository;
 import com.proyecto.servicios.service.producto.ProductoService;
-import jakarta.xml.bind.JAXBContext;
-import jakarta.xml.bind.Unmarshaller;
+import com.proyecto.servicios.service.producto.TransformProduct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.StringReader;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,6 +30,7 @@ public class ProductoServiceImpl implements ProductoService {
     private final ProductoMapper productoMapper;
     private final GestoPagoProductClient gestoPagoProductClient;
     private final GestoPagoTokenRepository tokenRepository;
+    private final TransformProduct transformProduct;
 
     @Value("${gestopago.auth.id-distribuidor:83}")
     private Integer idDistribuidor;
@@ -53,46 +51,19 @@ public class ProductoServiceImpl implements ProductoService {
         log.info("Llamando a la API XML getProductList.do de GestoPago...");
         String xmlResponse = gestoPagoProductClient.getProductListXml(bearerHeader);
 
-        List<Producto> productosAGuardar = new ArrayList<>();
-        try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(GestoPagoProductXmlResponse.class);
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            StringReader reader = new StringReader(xmlResponse);
-            GestoPagoProductXmlResponse parsedXml = (GestoPagoProductXmlResponse) unmarshaller.unmarshal(reader);
-
-            if (parsedXml.getProductos() == null || parsedXml.getProductos().isEmpty()) {
-                log.warn("La respuesta XML de GestoPago no contiene productos.");
-                return;
-            }
-
-            // Mapear los primeros 20 productos para pruebas
-            List<GestoPagoProductXmlResponse.ProductoXmlItem> items20 = parsedXml.getProductos()
-                    .stream()
-                    .limit(20)
-                    .collect(Collectors.toList());
-
-            log.info("Mapeando y guardando los primeros {} productos en la BD...", items20.size());
-
-            for (GestoPagoProductXmlResponse.ProductoXmlItem item : items20) {
-                Producto p = new Producto();
-                p.setProducto(item.getProducto());
-                p.setServicio(item.getServicio());
-                p.setIdServicio(item.getIdServicio() != null ? item.getIdServicio() : 0);
-                p.setIdProducto(item.getIdProducto() != null ? item.getIdProducto() : 0);
-                p.setIdCatTipoServicio(item.getIdCatTipoServicio() != null ? item.getIdCatTipoServicio() : 0);
-                p.setTipoFront(item.getTipoFront() != null ? item.getTipoFront() : 0);
-                p.setHasDigitoVerificador(Boolean.TRUE.equals(item.getHasDigitoVerificador()));
-                p.setTipoReferencia(item.getTipoReferencia());
-                p.setPrecio(item.getPrecio());
-                p.setShowAyuda(Boolean.TRUE.equals(item.getShowAyuda()));
-
-                productosAGuardar.add(p);
-            }
-
-        } catch (Exception e) {
-            log.error("Error al procesar el XML de getProductList.do: {}", e.getMessage(), e);
-            throw new RuntimeException("Error parseando la respuesta XML de GestoPago: " + e.getMessage(), e);
+        List<GestoPagoProductXmlResponse.ProductoXmlItem> items = transformProduct.transformProductXML(xmlResponse);
+        if (items.isEmpty()) {
+            log.warn("La respuesta XML de GestoPago no contiene productos.");
+            return;
         }
+
+        // Mapear los primeros 20 productos para pruebas
+        List<GestoPagoProductXmlResponse.ProductoXmlItem> items20 = items.stream()
+                .limit(20)
+                .collect(Collectors.toList());
+
+        log.info("Mapeando y guardando los primeros {} productos en la BD...", items20.size());
+        List<Producto> productosAGuardar = transformProduct.transformProductEntities(items20);
 
         List<Producto> guardados = productoRepository.saveAll(productosAGuardar);
         log.info("Se guardaron exitosamente {} productos en la BD", guardados.size());
@@ -155,6 +126,7 @@ public class ProductoServiceImpl implements ProductoService {
     }
 
 
+    // 7. GET /v1/productos/xml
     @Override
     public List<ProductoResponse> obtenerProductosXML() {
         log.info("Obteniendo token activo para consumir getProductList.do");
@@ -166,53 +138,9 @@ public class ProductoServiceImpl implements ProductoService {
         log.info("Llamando a la API XML getProductList.do de GestoPago...");
         String xmlResponse = gestoPagoProductClient.getProductListXml(bearerHeader);
 
-        List<ProductoResponse> response = new ArrayList<>();
-
-        try {
-            JAXBContext jaxbContext = JAXBContext.newInstance(GestoPagoProductXmlResponse.class);
-            Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-            if (xmlResponse == null || xmlResponse.isBlank()) {
-                throw new RuntimeException("La respuesta XML recibida de GestoPago es nula o vacía. Verifique el token de autenticación o la API Key.");
-            }
-
-            StringReader reader = new StringReader(xmlResponse);
-            GestoPagoProductXmlResponse parsedXml = (GestoPagoProductXmlResponse) unmarshaller.unmarshal(reader);
-
-            if (parsedXml.getProductos() == null || parsedXml.getProductos().isEmpty()) {
-                log.warn("La respuesta XML de GestoPago no contiene productos.");
-                return response;
-            }
-
-            // Mapear los primeros 20 productos para pruebas
-            List<GestoPagoProductXmlResponse.ProductoXmlItem> items20 = parsedXml.getProductos()
-                    .stream()
-                    .limit(20)
-                    .collect(Collectors.toList());
-
-            int i = 1;
-
-            for (GestoPagoProductXmlResponse.ProductoXmlItem item : items20) {
-                ProductoResponse p = new ProductoResponse();
-                p.setId(i ++);
-                p.setProducto(item.getProducto());
-                p.setServicio(item.getServicio());
-                p.setIdServicio(item.getIdServicio() != null ? item.getIdServicio() : 0);
-                p.setIdProducto(item.getIdProducto() != null ? item.getIdProducto() : 0);
-                p.setIdCatTipoServicio(item.getIdCatTipoServicio() != null ? item.getIdCatTipoServicio() : 0);
-                p.setTipoFront(item.getTipoFront() != null ? item.getTipoFront() : 0);
-                p.setHasDigitoVerificador(Boolean.TRUE.equals(item.getHasDigitoVerificador()));
-                p.setTipoReferencia(item.getTipoReferencia());
-                p.setPrecio(item.getPrecio());
-                p.setShowAyuda(Boolean.TRUE.equals(item.getShowAyuda()));
-
-                response.add(p);
-            }
-
-        } catch (Exception e) {
-            log.error("Error al procesar el XML de getProductList.do: {}", e.getMessage(), e);
-            throw new RuntimeException("Error parseando la respuesta XML de GestoPago: " + e.getMessage(), e);
-        }
-
-        return response;
+        List<GestoPagoProductXmlResponse.ProductoXmlItem> items = transformProduct.transformProductXML(xmlResponse);
+        return transformProduct.transformProductJSON(items);
     }
+
+
 }

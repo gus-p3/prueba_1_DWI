@@ -8,7 +8,11 @@ import com.proyecto.servicios.model.gestopago.producto.ProductoRequest;
 import com.proyecto.servicios.model.gestopago.producto.ProductoResponse;
 import org.mapstruct.*;
 
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 @Mapper(componentModel = "spring")
 public interface ProductoMapper {
@@ -26,4 +30,38 @@ public interface ProductoMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     void updateEntityFromPatch(ProductoPatchRequest request, @MappingTarget Producto entity);
+
+    // Mapeos MapStruct de items XML a ProductoResponse (DTO)
+    @Mapping(target = "id", ignore = true)
+    ProductoResponse xmlItemToResponse(com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse.ProductoXmlItem xmlItem);
+
+    List<ProductoResponse> xmlItemsToResponseList(List<com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse.ProductoXmlItem> xmlItems);
+
+    // Mapeos MapStruct de items XML a Producto (Entidad JPA)
+    @Mapping(target = "id", ignore = true)
+    Producto xmlItemToEntity(com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse.ProductoXmlItem xmlItem);
+
+    List<Producto> xmlItemsToEntityList(List<com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse.ProductoXmlItem> xmlItems);
+
+    default List<ProductoResponse> filtrarYOrdenarPorTipoFront(List<com.proyecto.servicios.model.gestopago.xml.GestoPagoProductXmlResponse.ProductoXmlItem> xmlItems) {
+        if (xmlItems == null || xmlItems.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        List<ProductoResponse> responses = xmlItemsToResponseList(xmlItems);
+        java.util.concurrent.atomic.AtomicInteger index = new java.util.concurrent.atomic.AtomicInteger(1);
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
+        return responses.stream()
+                .filter(p -> p.getTipoFront() != null && p.getTipoFront() > 0)
+                .sorted(Comparator.comparing(ProductoResponse::getTipoFront, Comparator.nullsLast(Comparator.naturalOrder())))
+                .peek(p -> {
+                    p.setId(index.getAndIncrement());
+                    if (p.getCreatedAt() == null) {
+                        p.setCreatedAt(now);
+                    }
+                })
+                .collect(Collectors.toList());
+    }
 }
+

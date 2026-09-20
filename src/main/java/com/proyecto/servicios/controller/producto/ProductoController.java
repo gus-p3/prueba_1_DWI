@@ -1,4 +1,4 @@
-package com.proyecto.servicios.controller;
+package com.proyecto.servicios.controller.producto;
 
 import com.proyecto.servicios.model.gestopago.producto.ProductoPatchRequest;
 import com.proyecto.servicios.model.gestopago.producto.ProductoRequest;
